@@ -8,6 +8,7 @@
 #include <cstring>
 #include <optional>
 
+// Set width and height as constants since they will be referred to multiple times
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
@@ -60,7 +61,7 @@ public:
 private:
 
     GLFWwindow* window;
-    VkInstance instance;
+    VkInstance instance; // Vulkan instance
     VkDebugUtilsMessengerEXT debugMessenger;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -75,6 +76,7 @@ private:
             throw std::runtime_error("validation layers requested, but not available!");
         }
 
+        // Struct to specify some important information to the driver about our application
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Hello Triangle";
@@ -83,10 +85,10 @@ private:
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.apiVersion = VK_API_VERSION_1_0;
 
+        // This struct will tell the Vulkan driver which global (entire program) extensions and validation layers we will use
         VkInstanceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
-
         auto extensions = getRequiredExtensions();
         createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         createInfo.ppEnabledExtensionNames = extensions.data();
@@ -106,20 +108,25 @@ private:
             createInfo.pNext = nullptr;
         }
 
-        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
+        // Check if instance was created successfully
+        // Parameters for object creation in Vulkan are: Pointer to struct, Pointer to custom allocator, and Pointer to variable it is stored in
+        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {  
             throw std::runtime_error("failed to create instance!");
         }
     }
 
+    // Initializing and creating a window
     void initWindow() {
-        glfwInit();
+        glfwInit(); // initialize glfw library
 
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Telling glfw not to create an OpenGL context since we will be using Vulkan
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // Disable window resizing for now
 
+        // Initialize window. Parameters are as follows: width, height, title, specify monitor to display on, OpenGL specific and wont be needed for this project
         window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     }
 
+    // Will be used to initialize Vulkan by calling functions related to it
     void initVulkan() {
         createInstance();
         setupDebugMessenger();
@@ -127,7 +134,9 @@ private:
         createLogicalDevice();
     }
 
+    // Will be used to render frames
     void mainLoop() {
+        // Keep window open and check for events like pressing the 'X' to close the window
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
         }
@@ -323,6 +332,7 @@ private:
 
     }
 
+    //Deallocate and destroy resources
     void cleanup() {
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
