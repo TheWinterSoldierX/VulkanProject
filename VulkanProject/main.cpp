@@ -64,6 +64,11 @@ private:
     VkDebugUtilsMessengerEXT debugMessenger;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    //This is to store the logical device
+    VkDevice device;
+
+    //Storing a handle to the graphics queue
+    VkQueue graphicsQueue;
 
     void createInstance() {
         if (enableValidationLayers && !checkValidationLayerSupport()) {
@@ -119,6 +124,7 @@ private:
         createInstance();
         setupDebugMessenger();
         pickPhysicalDevice();
+        createLogicalDevice();
     }
 
     void mainLoop() {
@@ -262,10 +268,67 @@ private:
         return VK_FALSE;
     }
 
+    //This will create the logical device and specify the features we will be using.
+    void createLogicalDevice() {
+
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+        //This struct will determine the number of queues we want for a single queue family.
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        
+        //We are currently looking for a queue with graphics capabilities.
+        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+        queueCreateInfo.queueCount = 1;
+
+        //Queue priority needs to be assigned regardless if there is a single queue.
+        //This lets you control the scheduling of the command buffer execution.
+        float queuePriority = 1.0f;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        //Now to specify the device features we will be using.
+        VkPhysicalDeviceFeatures deviceFeatures{};
+
+        //Creating the logical device
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+        //These are specific to the device.
+        //Specifying the extensions and validation layers.
+        createInfo.pQueueCreateInfos = &queueCreateInfo;
+        createInfo.queueCreateInfoCount = 1;
+
+        createInfo.pEnabledFeatures = &deviceFeatures;
+
+        createInfo.enabledExtensionCount = 0;
+
+        if (enableValidationLayers) {
+            //We set these so they can be compatible with older vulkan implementations.
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
+        }
+        else {
+            createInfo.enabledLayerCount = 0;
+        }
+
+        //Instantiating the logical device
+        //The error will return based on enabling non-existent extensions or specifying the usage of unsupported features.
+        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create logical device!");
+        }
+
+        //This is to retrieve the queue handles for each queue family. 
+        //Only use index 0 since we are only creating a single queue.
+        vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+
+    }
+
     void cleanup() {
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
+
+        vkDestroyDevice(device, nullptr);
 
         vkDestroyInstance(instance, nullptr);
 
