@@ -7,6 +7,7 @@
 #include <vector>
 #include <cstring>
 #include <optional>
+#include <set>
 
 // Set width and height as constants since they will be referred to multiple times
 const uint32_t WIDTH = 800;
@@ -43,9 +44,10 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 //bundle indices into a struct
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
 
     bool isComplete() {
-        return graphicsFamily.has_value();
+        return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
 
@@ -63,6 +65,7 @@ private:
     GLFWwindow* window;
     VkInstance instance; // Vulkan instance
     VkDebugUtilsMessengerEXT debugMessenger;
+    VkSurfaceKHR surface;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     //This is to store the logical device
@@ -70,6 +73,7 @@ private:
 
     //Storing a handle to the graphics queue
     VkQueue graphicsQueue;
+    VkQueue presentQueue;
 
     void createInstance() {
         if (enableValidationLayers && !checkValidationLayerSupport()) {
@@ -130,6 +134,7 @@ private:
     void initVulkan() {
         createInstance();
         setupDebugMessenger();
+        createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
     }
@@ -165,6 +170,13 @@ private:
             throw std::runtime_error("failed to set up debug messenger!");
         }
 
+    }
+
+    //pass parameters through vkresult from relevant platform
+    void createSurface() {
+        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create window surface!");
+        }
     }
 
     void pickPhysicalDevice() {
@@ -215,6 +227,14 @@ private:
         for (const auto& queueFamily : queueFamilies) {
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 indices.graphicsFamily = i;
+            }
+
+
+            VkBool32 presentSupport = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+            //check value of bool and store index
+            if (presentSupport) {
+                indices.presentFamily = i;
             }
 
             if (indices.isComplete()) {
@@ -282,18 +302,31 @@ private:
 
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
+        //create a set of unique queue families that are for the required queues
+        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
+        float queuePriority = 1.0f;
+        for (uint32_t queueFamily : uniqueQueueFamilies) {
+            VkDeviceQueueCreateInfo queueCreateInfo{};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
         //This struct will determine the number of queues we want for a single queue family.
-        VkDeviceQueueCreateInfo queueCreateInfo{};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        //VkDeviceQueueCreateInfo queueCreateInfo{};
+       // queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         
         //We are currently looking for a queue with graphics capabilities.
-        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-        queueCreateInfo.queueCount = 1;
+       // queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+        //queueCreateInfo.queueCount = 1;
 
         //Queue priority needs to be assigned regardless if there is a single queue.
         //This lets you control the scheduling of the command buffer execution.
-        float queuePriority = 1.0f;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
+        //float queuePriority = 1.0f;
+       // queueCreateInfo.pQueuePriorities = &queuePriority;
 
         //Now to specify the device features we will be using.
         VkPhysicalDeviceFeatures deviceFeatures{};
@@ -304,8 +337,12 @@ private:
 
         //These are specific to the device.
         //Specifying the extensions and validation layers.
-        createInfo.pQueueCreateInfos = &queueCreateInfo;
-        createInfo.queueCreateInfoCount = 1;
+        //createInfo.pQueueCreateInfos = &queueCreateInfo;
+        //createInfo.queueCreateInfoCount = 1;
+
+        //point to the vector
+        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        createInfo.pQueueCreateInfos = queueCreateInfos.data();
 
         createInfo.pEnabledFeatures = &deviceFeatures;
 
@@ -329,18 +366,21 @@ private:
         //This is to retrieve the queue handles for each queue family. 
         //Only use index 0 since we are only creating a single queue.
         vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
-
+        //If queue families are the same only need to pass index once
+        vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
     }
 
     //Deallocate and destroy resources
     void cleanup() {
+        vkDestroyDevice(device, nullptr);
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
 
-        vkDestroyDevice(device, nullptr);
-
-        vkDestroyInstance(instance, nullptr);
+        //destroy surface
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+        vkDestroyInstance(instance, nullptr);   
+              
 
         glfwDestroyWindow(window);
 
