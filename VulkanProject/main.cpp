@@ -86,6 +86,7 @@ private:
     VkInstance instance; // Vulkan instance
     VkDebugUtilsMessengerEXT debugMessenger;
     VkSurfaceKHR surface;
+    std::vector<VkImageView> swapChainImageViews;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     //This is to store the logical device
@@ -166,6 +167,7 @@ private:
         pickPhysicalDevice();
         createLogicalDevice();
         createSwapChain();
+        createImageViews();
     }
 
     // Will be used to render frames
@@ -512,6 +514,43 @@ private:
         swapChainExtent = extent;
     }
 
+    void createImageViews() {
+        // Resize the list to fit all of the image views that will be created
+        swapChainImageViews.resize(swapChainImages.size());
+
+        // Loop that iterates over all of the swap chain images
+        for (size_t i = 0; i < swapChainImages.size(); i++) {
+
+            // Parameters for image view creation found in VkImageViewCreateInfo struct
+            VkImageViewCreateInfo createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            createInfo.image = swapChainImages[i];
+
+            // Specify how image data should be interpreted.
+            // viewType allows user to treat image as 1D, 2D, 3D textures and cube maps
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format = swapChainImageFormat;
+
+            // Components field allows you to map and change the color channels around
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+            // subresourceRange describes purpose of the image and which part of the image should be accessed
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel = 0;
+            createInfo.subresourceRange.levelCount = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount = 1;
+
+            // Call vkCreateImageView
+            if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create image views!");
+            }
+        }
+    }
+
     //Function to populate the SwapChainSupportDetails Struct
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
         SwapChainSupportDetails details;
@@ -585,13 +624,17 @@ private:
 
     //Deallocate and destroy resources
     void cleanup() {
+        // Destroy image views
+        for (auto imageView : swapChainImageViews) {
+            vkDestroyImageView(device, imageView, nullptr);
+        }
         vkDestroySwapchainKHR(device, swapChain, nullptr);
         vkDestroyDevice(device, nullptr);
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
 
-        //destroy surface
+        // Destroy surface
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);   
               
