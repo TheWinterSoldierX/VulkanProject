@@ -10,6 +10,7 @@
 #include <optional>
 #include <set>
 #include <cstdint> // For UINT32_MAX
+#include <fstream>
 
 
 // Set width and height as constants since they will be referred to multiple times
@@ -103,6 +104,40 @@ private:
     VkExtent2D swapChainExtent;
 
 
+    
+
+    // Initializing and creating a window
+    void initWindow() {
+        glfwInit(); // initialize glfw library
+
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Telling glfw not to create an OpenGL context since we will be using Vulkan
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // Disable window resizing for now
+
+        // Initialize window. Parameters are as follows: width, height, title, specify monitor to display on, OpenGL specific and wont be needed for this project
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    }
+
+    // Will be used to initialize Vulkan by calling functions related to it
+    void initVulkan() {
+        createInstance();
+        setupDebugMessenger();
+        createSurface();
+        pickPhysicalDevice();
+        createLogicalDevice();
+        createSwapChain();
+        createImageViews();
+        createGraphicsPipeline();
+    }
+
+    // Will be used to render frames
+    void mainLoop() {
+        // Keep window open and check for events like pressing the 'X' to close the window
+        while (!glfwWindowShouldClose(window)) {
+            glfwPollEvents();
+        }
+
+    }
+
     void createInstance() {
         if (enableValidationLayers && !checkValidationLayerSupport()) {
             throw std::runtime_error("validation layers requested, but not available!");
@@ -142,39 +177,8 @@ private:
 
         // Check if instance was created successfully
         // Parameters for object creation in Vulkan are: Pointer to struct, Pointer to custom allocator, and Pointer to variable it is stored in
-        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {  
+        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
             throw std::runtime_error("failed to create instance!");
-        }
-
-    }
-
-    // Initializing and creating a window
-    void initWindow() {
-        glfwInit(); // initialize glfw library
-
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Telling glfw not to create an OpenGL context since we will be using Vulkan
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // Disable window resizing for now
-
-        // Initialize window. Parameters are as follows: width, height, title, specify monitor to display on, OpenGL specific and wont be needed for this project
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    }
-
-    // Will be used to initialize Vulkan by calling functions related to it
-    void initVulkan() {
-        createInstance();
-        setupDebugMessenger();
-        createSurface();
-        pickPhysicalDevice();
-        createLogicalDevice();
-        createSwapChain();
-        createImageViews();
-    }
-
-    // Will be used to render frames
-    void mainLoop() {
-        // Keep window open and check for events like pressing the 'X' to close the window
-        while (!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
         }
 
     }
@@ -357,6 +361,24 @@ private:
         std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
         return VK_FALSE;
+    }
+
+    static std::vector<char> readFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open()) {
+            throw std::runtime_error("failed to open file!");
+        }
+
+        size_t fileSize = (size_t)file.tellg();
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+
+        file.close();
+
+        return buffer;
     }
 
     //This will create the logical device and specify the features we will be using.
@@ -549,6 +571,45 @@ private:
                 throw std::runtime_error("failed to create image views!");
             }
         }
+    }
+
+    void createGraphicsPipeline() {
+        auto vertShaderCode = readFile("shaders/vert.spv");
+        auto fragShaderCode = readFile("shaders/frag.spv");
+
+        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertShaderStageInfo.module = vertShaderModule;
+        vertShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = fragShaderModule;
+        fragShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+        vkDestroyShaderModule(device, fragShaderModule, nullptr);
+        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+    }
+
+    VkShaderModule createShaderModule(const std::vector<char>& code) {
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = code.size();
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+        VkShaderModule shaderModule;
+        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create shader module!");
+        }
+
+        return shaderModule;
     }
 
     //Function to populate the SwapChainSupportDetails Struct
