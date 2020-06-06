@@ -103,7 +103,7 @@ private:
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
 
-
+    VkPipelineLayout pipelineLayout;
     
 
     // Initializing and creating a window
@@ -594,6 +594,103 @@ private:
 
         VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
+        //specify there is no vertex data to load in 
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputInfo.vertexBindingDescriptionCount = 0;
+        vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+
+
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};//struct describes what kind of geometry will be drawn
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;//triangle from every 3 vertices without reuse
+        inputAssembly.primitiveRestartEnable = VK_FALSE;//if set to true then possible to break up lines and triangles in the strip with special indexes
+
+        //describes the region of the framebuffer the output will be rendered to, will almost always be (0,0)
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float)swapChainExtent.width;
+        viewport.height = (float)swapChainExtent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        //scissor rectangle defines which regions will actually have pixels
+        //drawing whole framebuffer, specify scissor rectangle to cover whole entirely
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = swapChainExtent;
+
+        //struct that combines viewport and scissor into a viewport state
+        VkPipelineViewportStateCreateInfo viewportState{};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.viewportCount = 1;
+        viewportState.pViewports = &viewport;
+        viewportState.scissorCount = 1;
+        viewportState.pScissors = &scissor;
+
+        //struct that takes geometry that is shaped by vertices from vertex shader and turns into fragments to be colored by frag shader
+        VkPipelineRasterizationStateCreateInfo rasterizer{};
+        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer.depthClampEnable = VK_FALSE;//if set to true then fragments that are near or far are clamped as opposed to discarding
+        rasterizer.rasterizerDiscardEnable = VK_FALSE;//if set to true disables output to framebuffer
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;//fill area of polygon with fragments
+        rasterizer.lineWidth = 1.0f;//thickness of line
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;//vertex order for faces to be front-facing
+        rasterizer.depthBiasEnable = VK_FALSE;//alter depth values by adding a constant
+        rasterizer.depthBiasConstantFactor = 0.0f;
+        rasterizer.depthBiasClamp = 0.0f; 
+        rasterizer.depthBiasSlopeFactor = 0.0f; 
+
+        //anti-aliasing, combining fragment shaders of multiple polygons that rasterize to same pixel (disabled for now)
+        VkPipelineMultisampleStateCreateInfo multisampling{};
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling.minSampleShading = 1.0f; 
+        multisampling.pSampleMask = nullptr; 
+        multisampling.alphaToCoverageEnable = VK_FALSE; 
+        multisampling.alphaToOneEnable = VK_FALSE; 
+
+        //struct for color blending by mixing old and new value to produce final color
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachment.blendEnable = VK_FALSE;
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; 
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; 
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; 
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; 
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; 
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; 
+
+        //struct references the array of stuctures for all frambuffers and allows set of blend constants that can be used as blend factors
+        //this struct when enabled overwrites the struct above and disables it
+        VkPipelineColorBlendStateCreateInfo colorBlending{};
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlending.logicOpEnable = VK_FALSE;
+        colorBlending.logicOp = VK_LOGIC_OP_COPY;
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
+        colorBlending.blendConstants[0] = 0.0f;
+        colorBlending.blendConstants[1] = 0.0f;
+        colorBlending.blendConstants[2] = 0.0f;
+        colorBlending.blendConstants[3] = 0.0f;
+
+        //pass the transformation matrix to the vertex shader, or to create texture samplers in the fragment shader
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 0; 
+        pipelineLayoutInfo.pSetLayouts = nullptr; 
+        pipelineLayoutInfo.pushConstantRangeCount = 0; 
+        pipelineLayoutInfo.pPushConstantRanges = nullptr; 
+
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create pipeline layout!");
+        }
+
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
     }
@@ -685,6 +782,9 @@ private:
 
     //Deallocate and destroy resources
     void cleanup() {
+        //referenced throughout lifetime so needs to be destroyed at end
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
         // Destroy image views
         for (auto imageView : swapChainImageViews) {
             vkDestroyImageView(device, imageView, nullptr);
